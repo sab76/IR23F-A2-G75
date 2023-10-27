@@ -168,7 +168,8 @@ def scraper(url, resp):
         
     if resp.status == 200:
         links = extract_next_links(url, resp)
-        return [link for link in links if is_valid(link) and link not in visited_urls]  #don't put links you already visited before
+        #don't put links you already visited before or traps, maybe kinda clunky 
+        return [link for link in links if is_valid(link) and not trap_detector.is_trap(link) and link not in visited_urls]
     else:
         return []
 
@@ -183,9 +184,6 @@ def extract_next_links(url, resp):
         
        # Check for ASCII URLs before adding to links
         if not is_ascii_url(absolute_url):
-            continue
-        
-        if trap_detector.is_trap(absolute_url):
             continue
 
         # keep track of how many subdomains there are in the ics.uci.edu domain

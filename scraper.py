@@ -69,7 +69,7 @@ def hash_content(content, n=3, modulo=1000):
     ngram_hashes = hash_mod_ngrams(ngrams, modulo)
     combined_hash = hash(tuple(ngram_hashes))
     return combined_hash
-    
+   
 class TrapDetector:
     def __init__(self):
         self.pattern_counts = {}
@@ -135,7 +135,7 @@ def scraper(url, resp):
         final_url = resp.raw_response.url
         if url != final_url:
             logger.info(f"URL: {url} was redirected to {final_url}")
-            url = final_url  # Update the url variable to the final URL after redirection
+            url = normalize(final_url)  # Update the url variable to the final URL after redirection
             if not is_valid(url):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []

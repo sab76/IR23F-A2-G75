@@ -28,13 +28,16 @@ def get_urlhash(url):
     return sha256(
         f"{parsed.netloc}/{parsed.path}/{parsed.params}/"
         f"{parsed.query}/{parsed.fragment}".encode("utf-8")).hexdigest()
-
+    
 def normalize(url):
-    #if url.endswith("/"):
-    #    return url.rstrip("/")
-    #return url
-    url = urldefrag(url)[0]
-    url = url.lower()
-    if url.endswith('/'):
+    url = urldefrag(url)[0].lower()
+    
+    # Handle links that are like "www.ics.uci.edu" by prefixing them with a scheme.
+    if url.startswith("www."):
+        url = "https://" + url
+    
+    # Remove trailing slash after a filename (like .php/)
+    if re.search(r'\.\w+/$', url):
         url = url[:-1]
+
     return url

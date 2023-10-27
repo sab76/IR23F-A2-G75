@@ -11,7 +11,7 @@ visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
 visited_urls = set()
 visited_subdomains = set() #the ics.uci.edu subdomains
-MAX_CONTENT_SIZE = 10 * 1024 * 1024  # 10 MB file limit
+MAX_CONTENT_SIZE = 5 * 1024 * 1024  # 5 MB file limit
 word_frequencies = {}
 longest_page = {"url": None, "word_count": 0}
 logger = get_logger("SCRAPER")
@@ -102,9 +102,9 @@ def is_ascii_url(url):
 
 def scraper(url, resp):
     #checks if page sent actual data? Not sure this is good because it'll hide all the errors I think
-    if not hasattr(resp, 'raw_response') or not hasattr(resp.raw_response, 'content'):
-        logger.warning(f"Either 'raw_response' or 'content' attribute missing for URL: {url}. Skipping.")
-        return []
+    #if not hasattr(resp, 'raw_response') or not hasattr(resp.raw_response, 'content'):
+    #    logger.warning(f"Either 'raw_response' or 'content' attribute missing for URL: {url}. Skipping.")
+    #    return []
 
     # Check for redirects
     if resp.raw_response.history:
@@ -119,8 +119,9 @@ def scraper(url, resp):
             if not is_valid(url):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
-
-    if len(resp.raw_response.content) > MAX_CONTENT_SIZE:
+                
+    # AVOIDS BeautifulSoup processing on big files apparently slow
+    if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
         logger.warning(f"Content size for URL: {url} exceeds the threshold. Skipping.")
         return []
         
@@ -131,18 +132,25 @@ def scraper(url, resp):
         logger.warning(f"Similar content detected for URL: {url}. Skipping.")
         return []
         
+    # currently keeping the length of the longest page in terms of tokens WITHOUT the stop words, maybe change
     if len(tokens) > longest_page["word_count"]:
         longest_page["url"] = url
         longest_page["word_count"] = len(tokens)
 
     for token in tokens:
         word_frequencies[token] = word_frequencies.get(token, 0) + 1
-
+        
+    # Successfully processed the URL
+    logger.info(f"Successfully scraped content from URL: {url}")
+    # Add the URL to the visited urls
+    if url not in visited_urls:
+        visited_urls.add(url)
+    
     links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+    return [link for link in links if is_valid(link) and link not in visited_urls]  #don't put links you already visited before
 
 def extract_next_links(url, resp):
-    global visited_urls, visited_subdomains
+    global visited_subdomains
     links = []
 
     if resp.status == 200:
@@ -165,10 +173,7 @@ def extract_next_links(url, resp):
                 subdomain = parsed.netloc.split(".")[0]
                 visited_subdomains.add(subdomain)
 
-            if absolute_url not in visited_urls:
-                visited_urls.add(absolute_url)
-                logger.info(f"Added new URL to visited list: {absolute_url}")  # <-- Log here
-                links.append(absolute_url)
+            links.append(absolute_url)
 
     elif 400 <= resp.status < 700:
         logger.error(f"Error {resp.status} encountered at URL: {resp.url}")

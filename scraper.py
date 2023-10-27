@@ -111,6 +111,21 @@ def scraper(url, resp):
     #    logger.warning(f"Either 'raw_response' or 'content' attribute missing for URL: {url}. Skipping.")
     #    return []
 
+    #gonna check this instead not sure if best
+    
+    if not hasattr(resp, 'raw_response') or resp.raw_response is None:
+        logger.warning(f"'raw_response' attribute missing or None for URL: {url}. Skipping.")
+        return []
+        
+    if 400 <= resp.status < 700:
+        logger.error(f"Error {resp.status} encountered at URL: {resp.url}")
+        return []
+        
+    if not hasattr(resp.raw_response, 'content'):
+        logger.warning(f"'content' attribute missing for URL: {url}. Skipping further processing but logging the issue.")
+        return []
+
+
     # Check for redirects
     if resp.raw_response.history:
         if len(resp.raw_response.history) > 5:
@@ -150,37 +165,36 @@ def scraper(url, resp):
     # Add the URL to the visited urls
     if url not in visited_urls:
         visited_urls.add(url)
-    
-    links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link) and link not in visited_urls]  #don't put links you already visited before
+        
+    if resp.status == 200:
+        links = extract_next_links(url, resp)
+        return [link for link in links if is_valid(link) and link not in visited_urls]  #don't put links you already visited before
+    else:
+        return []
 
 def extract_next_links(url, resp):
     global visited_subdomains
     links = []
 
-    if resp.status == 200:
-        soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+    
+    for a_tag in soup.find_all('a', href=True):
+        absolute_url = normalize(urljoin(url, a_tag['href']))
         
-        for a_tag in soup.find_all('a', href=True):
-            absolute_url = normalize(urljoin(url, a_tag['href']))
-            
-           # Check for ASCII URLs before adding to links
-            if not is_ascii_url(absolute_url):
-                continue
-            
-            if trap_detector.is_trap(absolute_url):
-                continue
+       # Check for ASCII URLs before adding to links
+        if not is_ascii_url(absolute_url):
+            continue
+        
+        if trap_detector.is_trap(absolute_url):
+            continue
 
-            # keep track of how many subdomains there are in the ics.uci.edu domain
-            parsed = urlparse(absolute_url)
-            if "ics.uci.edu" in parsed.netloc:
-                subdomain = parsed.netloc.split(".")[0]
-                visited_subdomains.add(subdomain)
+        # keep track of how many subdomains there are in the ics.uci.edu domain
+        parsed = urlparse(absolute_url)
+        if "ics.uci.edu" in parsed.netloc:
+            subdomain = parsed.netloc.split(".")[0]
+            visited_subdomains.add(subdomain)
 
-            links.append(absolute_url)
-
-    elif 400 <= resp.status < 700:
-        logger.error(f"Error {resp.status} encountered at URL: {resp.url}")
+        links.append(absolute_url)
 
     return links
 

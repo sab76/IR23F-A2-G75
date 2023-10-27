@@ -73,7 +73,8 @@ def hash_content(content, n=3, modulo=1000):
 class TrapDetector:
     def __init__(self):
         self.pattern_counts = {}
-        self.TRAP_THRESHOLD = 10  # Adjust this value based on your requirements
+        self.logged_traps = set()  # keep track of logged trap URLs
+        self.TRAP_THRESHOLD = 10  # Currently 10 maybe should be higher
 
     def simplify_url(self, url):
         # Remove numbers, parameters, and trailing slashes
@@ -87,6 +88,10 @@ class TrapDetector:
         self.pattern_counts[simple_url] = self.pattern_counts.get(simple_url, 0) + 1
         
         if self.pattern_counts[simple_url] > self.TRAP_THRESHOLD:
+            # Only log once for each URL flagged as a trap
+            if simple_url not in self.logged_traps:
+                logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+                self.logged_traps.add(simple_url)
             return True
         return False
 
@@ -164,7 +169,6 @@ def extract_next_links(url, resp):
                 continue
             
             if trap_detector.is_trap(absolute_url):
-                logger.warning(f"Potential trap detected at URL: {absolute_url}. Skipping.")
                 continue
 
             # keep track of how many subdomains there are in the ics.uci.edu domain

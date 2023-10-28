@@ -38,23 +38,23 @@ def get_robots_parser(domain):
     parser = None
     fetch_required = False
     
-    #with data_lock:
-    if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
-        fetch_required = True
+    with data_lock:
+        if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
+            fetch_required = True
             
     if fetch_required:
         rerp = RobotExclusionRulesParser()
         rerp.user_agent = "Group75Scraper"
         try:
             rerp.fetch(f"{domain}/robots.txt")
-            #with data_lock:
-            robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
-            logger.info(f"Fetched robots.txt for domain: {domain}")
+            with data_lock:
+                robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
+                logger.info(f"Fetched robots.txt for domain: {domain}")
         except Exception as e:
             logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
     else:
-        #with data_lock:
-        parser = robot_parsers[domain]['parser']
+        with data_lock:
+            parser = robot_parsers[domain]['parser']
     
     return parser
 
@@ -293,6 +293,9 @@ def is_valid(url):
             return False
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
+            return False
+        #filter out xmlrpc.php
+        if re.search(r'xmlrpc\.php', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

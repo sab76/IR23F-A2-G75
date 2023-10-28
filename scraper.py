@@ -184,19 +184,21 @@ def extract_next_links(url, resp):
 
     soup = BeautifulSoup(resp.raw_response.content, 'lxml')
     
-    # Extracting links from anchor tags in the body    
-    for a_tag in soup.find_all('a', href=True):
-        absolute_url = normalize(urljoin(url, a_tag['href']))
+    # Function to clean href values
+    def clean_href(href_value):
+        # Remove leading and trailing quotes and unescape any slashes
+        return href_value.strip('"').replace('\/', '/')
+    
+    # Extracting links from anchor and link tags
+    for tag in soup.find_all(['a', 'link'], href=True):
+        href_value = tag['href'].strip()
+        cleaned_href = clean_href(href_value)
         
-       # Check for ASCII URLs before adding to links
-        if not is_ascii_url(absolute_url):
-            continue
-
-        links.append(absolute_url)
-
-    # Extracting links from link tags in the head
-    for link_tag in soup.find_all('link', href=True):
-        absolute_url = normalize(urljoin(url, link_tag['href']))
+        # Check if the cleaned href value is already an absolute URL
+        if re.match(r'^https?://', cleaned_href):
+            absolute_url = normalize(cleaned_href)
+        else:
+            absolute_url = normalize(urljoin(url, cleaned_href))
         
         # Check for ASCII URLs before adding to links
         if not is_ascii_url(absolute_url):

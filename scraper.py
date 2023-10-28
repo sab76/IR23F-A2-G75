@@ -9,7 +9,7 @@ from utils import get_urlhash, normalize, get_logger
 MAX_HASHES_STORED = 100
 visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
-visited_urls = set()
+visited_subdomains = {}
 visited_subdomains = set() #the ics.uci.edu subdomains
 MAX_CONTENT_SIZE = 5 * 1024 * 1024  # 5 MB file limit
 word_frequencies = {}
@@ -160,25 +160,30 @@ def scraper(url, resp):
     for token in tokens:
         word_frequencies[token] = word_frequencies.get(token, 0) + 1
         
-    # Successfully processed the URL
-    logger.info(f"Successfully scraped content from URL: {url}")
-    # Add the URL to the visited urls
-    if url not in visited_urls:
-        visited_urls.add(url)
-        
     if resp.status == 200:
+        # Successfully processed the URL
+        logger.info(f"Successfully scraped content from URL: {url}")
         links = extract_next_links(url, resp)
+        # Add the URL to the visited urls
+        if url not in visited_urls:
+            visited_urls.add(url)
+
+        # Check and keep track of how many subdomains there are in the ics.uci.edu domain
+        parsed = urlparse(url)  # Use the current URL
+        if "ics.uci.edu" in parsed.netloc:
+            subdomain = parsed.netloc.split(".")[0]
+            visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
         #don't put links you already visited before or traps, maybe kinda clunky 
         return [link for link in links if is_valid(link) and not trap_detector.is_trap(link) and link not in visited_urls]
     else:
         return []
 
 def extract_next_links(url, resp):
-    global visited_subdomains
     links = []
 
     soup = BeautifulSoup(resp.raw_response.content, 'lxml')
     
+    # Extracting links from anchor tags in the body    
     for a_tag in soup.find_all('a', href=True):
         absolute_url = normalize(urljoin(url, a_tag['href']))
         
@@ -186,11 +191,15 @@ def extract_next_links(url, resp):
         if not is_ascii_url(absolute_url):
             continue
 
-        # keep track of how many subdomains there are in the ics.uci.edu domain
-        parsed = urlparse(absolute_url)
-        if "ics.uci.edu" in parsed.netloc:
-            subdomain = parsed.netloc.split(".")[0]
-            visited_subdomains.add(subdomain)
+        links.append(absolute_url)
+
+    # Extracting links from link tags in the head
+    for link_tag in soup.find_all('link', href=True):
+        absolute_url = normalize(urljoin(url, link_tag['href']))
+        
+        # Check for ASCII URLs before adding to links
+        if not is_ascii_url(absolute_url):
+            continue
 
         links.append(absolute_url)
 
@@ -232,4 +241,6 @@ def get_unique_visited_count():
     return len(visited_urls)
     
 def get_sorted_subdomains():
-    return sorted(visited_subdomains)
+    # Sort the dictionary by its keys (subdomains) in alphabetical order
+    sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
+    return sorted_subdomains

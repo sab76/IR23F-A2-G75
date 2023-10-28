@@ -292,7 +292,7 @@ def is_valid(url):
         if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
             return False
         return not re.match(
-            r".*\.(css|js|bmp|gif|jpe?g|ico"
+            r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
             + r"|png|tiff?|mid|mp2|mp3|mp4"
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"

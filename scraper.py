@@ -11,11 +11,14 @@ MAX_HASHES_STORED = 100
 visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
 visited_subdomains = {} #the ics.uci.edu subdomains
-visited_urls = set() 
+visited_urls = set() #valid pages we visited
+error_urls = set() #pages we visited that gave us an error
 MAX_CONTENT_SIZE = 5 * 1024 * 1024  # 5 MB file limit
 word_frequencies = {}
 longest_page = {"url": None, "word_count": 0}
 logger = get_logger("SCRAPER")
+
+data_lock = threading.Lock() #multithreading for saving, could be more multithreaded though
 
 try:
     with open("common_words.txt", "r") as file:
@@ -29,16 +32,29 @@ except Exception as e:
     
 def get_robots_parser(domain): 
     current_time = datetime.now()
-    if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
+    parser = None
+    fetch_required = False
+    
+    with data_lock:
+        if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
+            fetch_required = True
+            
+    if fetch_required:
         rerp = RobotExclusionRulesParser()
         rerp.user_agent = "Group75Scraper"
         try:
             rerp.fetch(f"{domain}/robots.txt")
-            robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
+            with data_lock:
+                robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
             logger.info(f"Fetched robots.txt for domain: {domain}")
         except Exception as e:
             logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
-    return robot_parsers[domain]['parser']
+    else:
+        with data_lock:
+            parser = robot_parsers[domain]['parser']
+    
+    return parser
+
 
 def tokenize_text(content):
     content = content.lower()
@@ -81,7 +97,7 @@ class TrapDetector:
         # Remove numbers, parameters, and trailing slashes
         simple_url = re.sub(r'\d+', '', url)  # remove numbers
         simple_url = re.sub(r'\?.*$', '', simple_url)  # remove query params
-        simple_url = re.sub(r'/$', '', simple_url)  # remove trailing slash
+        simple_url = re.sub(r'[/]+$', '', simple_url)  # remove trailing slash
         return simple_url
 
     def is_trap(self, url):
@@ -121,7 +137,9 @@ def scraper(url, resp):
         
     if 400 <= resp.status < 700:
         logger.error(f"Error {resp.status} encountered at URL: {resp.url}")
-        return []
+        with data_lock:
+            error_urls.add(resp.url)
+            return []
         
     if not hasattr(resp.raw_response, 'content'):
         logger.warning(f"'content' attribute missing for URL: {url}. Skipping further processing but logging the issue.")
@@ -138,6 +156,10 @@ def scraper(url, resp):
         if url != final_url:
             logger.info(f"URL: {url} was redirected to {final_url}")
             url = normalize(final_url)  # Update the url variable to the final URL after redirection
+            # Check for traps using the final URL (not sure if will help tbh)
+            if trap_detector.is_trap(url):
+                logger.warning(f"Trap detected after redirecting to URL: {url}. Skipping.")
+                return []
             if not is_valid(url):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
@@ -156,28 +178,35 @@ def scraper(url, resp):
         return []
         
     # currently keeping the length of the longest page in terms of tokens WITHOUT the stop words, maybe change
-    if len(tokens) > longest_page["word_count"]:
-        longest_page["url"] = url
-        longest_page["word_count"] = len(tokens)
+    with data_lock:
+        if len(tokens) > longest_page["word_count"]:
+            longest_page["url"] = url
+            longest_page["word_count"] = len(tokens)
 
-    for token in tokens:
-        word_frequencies[token] = word_frequencies.get(token, 0) + 1
+    with data_lock:
+        for token in tokens:
+            word_frequencies[token] = word_frequencies.get(token, 0) + 1
         
     if resp.status == 200:
         # Successfully processed the URL
         logger.info(f"Successfully scraped content from URL: {url}")
         links = extract_next_links(url, resp)
         # Add the URL to the visited urls
-        if url not in visited_urls:
-            visited_urls.add(url)
+        with data_lock:
+            if url not in visited_urls:
+                visited_urls.add(url)
 
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
         parsed = urlparse(url)  # Use the current URL
         if "ics.uci.edu" in parsed.netloc:
             subdomain = parsed.netloc.split(".")[0]
-            visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
-        #don't put links you already visited before or traps, maybe kinda clunky 
-        return [link for link in links if is_valid(link) and link not in visited_urls and not trap_detector.is_trap(link)]
+            with data_lock:
+                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
+        #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
+        with data_lock:
+            return [link for link in links
+            if is_valid(link) and link not in visited_urls and link not in error_urls
+            and not trap_detector.is_trap(link)]
     else:
         return []
 
@@ -239,8 +268,11 @@ def is_valid(url):
             r".*(\.ics\.uci\.edu|\.cs\.uci\.edu|\.informatics\.uci\.edu|\.stat\.uci\.edu)/.*",
             url):
             return False
-        # Added check to filter out URLs ending with (4 numbers)/revisions because there's a bunch of posts like that
-        if re.search(r'/\d{4}/revisions$', url):
+        # Check to filter out URLs ending with (4 numbers)/revisions or /revisions/(4 numbers)
+        if re.search(r'/\d{4}/revisions$', url) or re.search(r'/revisions/\d{4}$', url):
+            return False
+        #removes repeated directories in a link, not sure if it's really needed for UCI sites
+        if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -266,9 +298,20 @@ def is_valid(url):
         raise
 
 def get_unique_visited_count():
-    return len(visited_urls)
+    with data_lock:
+        return len(visited_urls)
     
 def get_sorted_subdomains():
-    # Sort the dictionary by its keys (subdomains) in alphabetical order
-    sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
-    return sorted_subdomains
+    with data_lock:
+        # Sort the dictionary by its keys (subdomains) in alphabetical order
+        sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
+        return sorted_subdomains
+    
+def get_longest_page():
+    with data_lock:
+        return longest_page
+
+def get_top_50_words():
+    with data_lock:
+        sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
+        return sorted_words[:50]

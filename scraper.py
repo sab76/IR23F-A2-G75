@@ -291,6 +291,9 @@ def is_valid(url):
         #removes repeated directories in a link, not sure if it's really needed for UCI sites
         if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
             return False
+        # Check if URL ends with .txt and is not robots.txt
+        if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
+            return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
             + r"|png|tiff?|mid|mp2|mp3|mp4"

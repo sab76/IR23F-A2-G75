@@ -9,8 +9,8 @@ from utils import get_urlhash, normalize, get_logger
 MAX_HASHES_STORED = 100
 visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
-visited_subdomains = {}
-visited_subdomains = set() #the ics.uci.edu subdomains
+visited_subdomains = {} #the ics.uci.edu subdomains
+visited_urls = set() 
 MAX_CONTENT_SIZE = 5 * 1024 * 1024  # 5 MB file limit
 word_frequencies = {}
 longest_page = {"url": None, "word_count": 0}
@@ -106,6 +106,7 @@ def is_ascii_url(url):
     return True
 
 def scraper(url, resp):
+    global visited_urls
     #checks if page sent actual data? Not sure this is good because it'll hide all the errors I think
     #if not hasattr(resp, 'raw_response') or not hasattr(resp.raw_response, 'content'):
     #    logger.warning(f"Either 'raw_response' or 'content' attribute missing for URL: {url}. Skipping.")

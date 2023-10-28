@@ -300,6 +300,9 @@ def is_valid(url):
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
             return False
+        #remove mailto links
+        if re.match(r'^mailto:', url):
+            return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
             + r"|png|tiff?|mid|mp2|mp3|mp4"

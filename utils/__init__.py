@@ -2,6 +2,7 @@ import os
 import logging
 from hashlib import sha256
 from urllib.parse import urlparse, urldefrag
+import re
 
 def get_logger(name, filename=None):
     logger = logging.getLogger(name)

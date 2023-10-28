@@ -144,8 +144,8 @@ def scraper(url, resp):
                 return []
                 
     if trap_detector.is_trap(url):
-    logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
-    return []
+        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+        return []
     
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 

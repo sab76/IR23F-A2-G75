@@ -19,7 +19,7 @@ class Crawler(object):
             load_data()
 
         # Schedule saving
-        self.schedule_data_saving()
+        #self.schedule_data_saving()
 
     def start_async(self):
         self.workers = [

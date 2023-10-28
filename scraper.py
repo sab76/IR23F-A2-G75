@@ -38,23 +38,23 @@ def get_robots_parser(domain):
     parser = None
     fetch_required = False
     
-    with data_lock:
-        if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
-            fetch_required = True
+    #with data_lock:
+    if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
+        fetch_required = True
             
     if fetch_required:
         rerp = RobotExclusionRulesParser()
         rerp.user_agent = "Group75Scraper"
         try:
             rerp.fetch(f"{domain}/robots.txt")
-            with data_lock:
-                robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
+            #with data_lock:
+            robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
             logger.info(f"Fetched robots.txt for domain: {domain}")
         except Exception as e:
             logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
     else:
-        with data_lock:
-            parser = robot_parsers[domain]['parser']
+        #with data_lock:
+        parser = robot_parsers[domain]['parser']
     
     return parser
 
@@ -283,10 +283,6 @@ def is_valid(url):
             return False
         #removes repeated directories in a link, not sure if it's really needed for UCI sites
         if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
-            return False
-        # Remove placeholder patterns idk why that would happen but yeah
-        if re.search(r"\{.*?\}", url):
-            logger.warning(f"URL contains placeholder pattern: {url}. Skipping.")
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"

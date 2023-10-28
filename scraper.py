@@ -126,6 +126,7 @@ def is_ascii_url(url):
     return True
 
 def scraper(url, resp):
+    logger.debug(f"Entering scraper with URL: {url}")
     global visited_urls
     #checks if page sent actual data? Not sure this is good because it'll hide all the errors I think
     #if not hasattr(resp, 'raw_response') or not hasattr(resp.raw_response, 'content'):
@@ -191,6 +192,7 @@ def scraper(url, resp):
             word_frequencies[token] = word_frequencies.get(token, 0) + 1
         
     if resp.status == 200:
+        logger.debug(f"Processing content for URL: {url}")
         # Successfully processed the URL
         logger.info(f"Successfully scraped content from URL: {url}")
         links = extract_next_links(url, resp)
@@ -198,6 +200,7 @@ def scraper(url, resp):
         with data_lock:
             if url not in visited_urls:
                 visited_urls.add(url)
+                logger.debug(f"URL added to visited_urls: {url}. Total visited: {len(visited_urls)}")
 
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
         parsed = urlparse(url)  # Use the current URL
@@ -211,9 +214,11 @@ def scraper(url, resp):
             if is_valid(link) and link not in visited_urls and link not in error_urls
             and not trap_detector.is_trap(link)]
     else:
+        logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []
 
 def extract_next_links(url, resp): #added ability to parse json files although not sure we should
+    logger.debug(f"Extracting next links from URL: {url}")
     links = []
 
     content_type = resp.raw_response.headers.get('Content-Type', '')
@@ -258,11 +263,13 @@ def extract_next_links(url, resp): #added ability to parse json files although n
                 continue
 
             links.append(absolute_url)
-
+            
+    logger.debug(f"Extracted {len(links)} links from URL: {url}")
     return links
 
 
 def is_valid(url):
+    logger.debug(f"Checking if URL is valid: {url}")
     try:
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):

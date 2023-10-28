@@ -5,6 +5,7 @@ from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
 from utils import get_urlhash, normalize, get_logger
+import json
 
 MAX_HASHES_STORED = 100
 visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
@@ -185,34 +186,54 @@ def scraper(url, resp):
     else:
         return []
 
-def extract_next_links(url, resp):
+def extract_next_links(url, resp): #added ability to parse json files although not sure we should
     links = []
 
-    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
-    
-    # Function to clean href values
-    def clean_href(href_value):
-        # Remove leading and trailing quotes and unescape any slashes
-        return href_value.strip('"').replace('\/', '/')
-    
-    # Extracting links from anchor and link tags
-    for tag in soup.find_all(['a', 'link'], href=True):
-        href_value = tag['href'].strip()
-        cleaned_href = clean_href(href_value)
-        
-        # Check if the cleaned href value is already an absolute URL
-        if re.match(r'^https?://', cleaned_href):
-            absolute_url = normalize(cleaned_href)
-        else:
-            absolute_url = normalize(urljoin(url, cleaned_href))
-        
-        # Check for ASCII URLs before adding to links
-        if not is_ascii_url(absolute_url):
-            continue
+    content_type = resp.raw_response.headers.get('Content-Type', '')
 
-        links.append(absolute_url)
+    # If the content type is JSON
+    if 'application/json' in content_type:
+        try:
+            json_data = json.loads(resp.raw_response.content)
+            # Extract URLs from JSON. Here, we'll look for 'href' values.
+            def extract_urls_from_json(json_obj):
+                if isinstance(json_obj, dict):
+                    for key, value in json_obj.items():
+                        if key == 'href':
+                            # Normalize and append URL
+                            links.append(normalize(value))
+                        else:
+                            extract_urls_from_json(value)
+                elif isinstance(json_obj, list):
+                    for item in json_obj:
+                        extract_urls_from_json(item)
+
+            extract_urls_from_json(json_data)
+
+        except json.JSONDecodeError:
+            # If there's an error parsing the JSON content, log it and move on.
+            logger.error(f"Error parsing JSON content from URL: {url}")
+
+    # If the content type is HTML or something else
+    else:
+        soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+        for tag in soup.find_all(['a', 'link'], href=True):
+            href_value = tag['href'].strip()
+            
+            # Check if the href value is already an absolute URL
+            if re.match(r'^https?://', href_value):
+                absolute_url = normalize(href_value)
+            else:
+                absolute_url = normalize(urljoin(url, href_value))
+            
+            # Check for ASCII URLs before adding to links
+            if not is_ascii_url(absolute_url):
+                continue
+
+            links.append(absolute_url)
 
     return links
+
 
 def is_valid(url):
     try:

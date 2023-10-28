@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from utils import get_urlhash, normalize, get_logger
 import threading
 import json
+import faulthandler
+faulthandler.enable()
 
 MAX_HASHES_STORED = 100
 visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)

@@ -284,6 +284,10 @@ def is_valid(url):
         #removes repeated directories in a link, not sure if it's really needed for UCI sites
         if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
             return False
+        # Remove placeholder patterns idk why that would happen but yeah
+        if re.search(r"\{.*?\}", url):
+            logger.warning(f"URL contains placeholder pattern: {url}. Skipping.")
+            return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"

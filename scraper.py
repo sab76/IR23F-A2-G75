@@ -21,7 +21,7 @@ word_frequencies = {}
 longest_page = {"url": None, "word_count": 0}
 logger = get_logger("SCRAPER")
 
-data_lock = threading.Lock() #multithreading for saving, could be more multithreaded though
+#data_lock = threading.Lock() #multithreading for saving, could be more multithreaded though
 
 try:
     with open("common_words.txt", "r") as file:
@@ -141,9 +141,9 @@ def scraper(url, resp):
         
     if 400 <= resp.status < 700:
         logger.error(f"Error {resp.status} encountered at URL: {resp.url}")
-        with data_lock:
-            error_urls.add(resp.url)
-            return []
+        #with data_lock:
+        error_urls.add(resp.url)
+        return []
         
     if not hasattr(resp.raw_response, 'content'):
         logger.warning(f"'content' attribute missing for URL: {url}. Skipping further processing but logging the issue.")
@@ -182,14 +182,14 @@ def scraper(url, resp):
         return []
         
     # currently keeping the length of the longest page in terms of tokens WITHOUT the stop words, maybe change
-    with data_lock:
-        if len(tokens) > longest_page["word_count"]:
-            longest_page["url"] = url
-            longest_page["word_count"] = len(tokens)
+    #with data_lock:
+    if len(tokens) > longest_page["word_count"]:
+        longest_page["url"] = url
+        longest_page["word_count"] = len(tokens)
 
-    with data_lock:
-        for token in tokens:
-            word_frequencies[token] = word_frequencies.get(token, 0) + 1
+    #with data_lock:
+    for token in tokens:
+        word_frequencies[token] = word_frequencies.get(token, 0) + 1
         
     if resp.status == 200:
         logger.debug(f"Processing content for URL: {url}")
@@ -197,22 +197,22 @@ def scraper(url, resp):
         logger.info(f"Successfully scraped content from URL: {url}")
         links = extract_next_links(url, resp)
         # Add the URL to the visited urls
-        with data_lock:
-            if url not in visited_urls:
-                visited_urls.add(url)
-                logger.debug(f"URL added to visited_urls: {url}. Total visited: {len(visited_urls)}")
+        #with data_lock:
+        if url not in visited_urls:
+            visited_urls.add(url)
+            logger.debug(f"URL added to visited_urls: {url}. Total visited: {len(visited_urls)}")
 
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
         parsed = urlparse(url)  # Use the current URL
         if "ics.uci.edu" in parsed.netloc:
             subdomain = parsed.netloc.split(".")[0]
-            with data_lock:
-                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
+            #with data_lock:
+            visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
         #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
-        with data_lock:
-            return [link for link in links
-            if is_valid(link) and link not in visited_urls and link not in error_urls
-            and not trap_detector.is_trap(link)]
+        #with data_lock:
+        return [link for link in links
+        if is_valid(link) and link not in visited_urls and link not in error_urls
+        and not trap_detector.is_trap(link)]
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []
@@ -308,20 +308,20 @@ def is_valid(url):
         raise
 
 def get_unique_visited_count():
-    with data_lock:
-        return len(visited_urls)
+    #with data_lock:
+    return len(visited_urls)
     
 def get_sorted_subdomains():
-    with data_lock:
+    #with data_lock:
         # Sort the dictionary by its keys (subdomains) in alphabetical order
-        sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
-        return sorted_subdomains
+    sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
+    return sorted_subdomains
     
 def get_longest_page():
-    with data_lock:
-        return longest_page
+    #with data_lock:
+    return longest_page
 
 def get_top_50_words():
-    with data_lock:
-        sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
-        return sorted_words[:50]
+    #with data_lock:
+    sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
+    return sorted_words[:50]

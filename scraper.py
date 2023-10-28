@@ -292,7 +292,7 @@ def is_valid(url):
         if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
             return False
         #filters out .html files that are on the ics.uci.edu domain
-        if re.search(r'.*ics\.uci\.edu.*\.html$', url):
+        if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

@@ -88,8 +88,6 @@ class TrapDetector:
         simple_url = self.simplify_url(url)
         self.pattern_counts[simple_url] = self.pattern_counts.get(simple_url, 0) + 1
         
-        logger.debug(f"URL Count for {simple_url}: {self.pattern_counts[simple_url]}")
-        
         if self.pattern_counts[simple_url] > self.TRAP_THRESHOLD:
             # Only log once for each URL flagged as a trap
             if simple_url not in self.logged_traps:
@@ -144,9 +142,6 @@ def scraper(url, resp):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
                 
-    if trap_detector.is_trap(url):
-        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
-        return []
     
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
@@ -182,7 +177,7 @@ def scraper(url, resp):
             subdomain = parsed.netloc.split(".")[0]
             visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
         #don't put links you already visited before or traps, maybe kinda clunky 
-        return [link for link in links if is_valid(link) and link not in visited_urls]
+        return [link for link in links if is_valid(link) and link not in visited_urls and not trap_detector.is_trap(link)]
     else:
         return []
 
@@ -243,6 +238,9 @@ def is_valid(url):
         if not re.match(
             r".*(\.ics\.uci\.edu|\.cs\.uci\.edu|\.informatics\.uci\.edu|\.stat\.uci\.edu)/.*",
             url):
+            return False
+        # Added check to filter out URLs ending with (4 numbers)/revisions because there's a bunch of posts like that
+        if re.search(r'/\d{4}/revisions$', url):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"

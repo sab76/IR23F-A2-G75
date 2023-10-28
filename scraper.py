@@ -5,6 +5,7 @@ from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
 from utils import get_urlhash, normalize, get_logger
+import threading
 import json
 
 MAX_HASHES_STORED = 100

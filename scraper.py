@@ -282,6 +282,9 @@ def is_valid(url):
         # or https://ngs.ics.uci.edu/wp-json/oembed/1.0/embed?url=https%3a%2f%2fngs.ics.uci.edu%2fextreme-stories-12%2f&format=xml
         if 'wp-json' in url:
             return False
+        # because of wiki.ics.uci.edu/doku I have a bunch of queries I'm guessing that's not interesting to scrape
+        if '?do=' in url:
+            return False
         # Check to filter out URLs ending with (4 numbers)/revisions or /revisions/(4 numbers)
         if re.search(r'/\d{4}/revisions$', url) or re.search(r'/revisions/\d{4}$', url):
             return False

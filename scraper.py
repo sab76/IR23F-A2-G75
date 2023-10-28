@@ -294,8 +294,8 @@ def is_valid(url):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php
-        if re.search(r'xmlrpc\.php', url):
+        #filter out xmlrpc.php and $url
+        if re.search(r'xmlrpc\.php|\$url', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

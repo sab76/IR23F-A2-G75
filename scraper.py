@@ -95,7 +95,7 @@ class TrapDetector:
     def __init__(self):
         self.pattern_counts = {}
         self.logged_traps = set()  # keep track of logged trap URLs
-        self.TRAP_THRESHOLD = 10  # Currently 10 maybe should be higher
+        self.TRAP_THRESHOLD = 20  # Currently 20 maybe should be higher / lower
 
     def simplify_url(self, url):
         # Remove numbers, parameters, and trailing slashes
@@ -283,8 +283,8 @@ def is_valid(url):
         # or https://ngs.ics.uci.edu/wp-json/oembed/1.0/embed?url=https%3a%2f%2fngs.ics.uci.edu%2fextreme-stories-12%2f&format=xml
         if 'wp-json' in url:
             return False
-        # because of wiki.ics.uci.edu/doku I have a bunch of queries I'm guessing that's not interesting to scrape
-        if '?do=' in url:
+        # maybe it's too agressive but I'm not visiting anything that has a query in it
+        if '?' in url:
             return False
         # Check to filter out URLs ending with (4 numbers)/revisions or /revisions/(4 numbers)
         if re.search(r'/\d{4}/revisions$', url) or re.search(r'/revisions/\d{4}$', url):

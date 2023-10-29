@@ -310,7 +310,7 @@ def is_valid(url):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
+            + r"|png|tiff?|mid|mp2|mp3|mp4|lisp" #removing lisp files
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"

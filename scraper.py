@@ -95,7 +95,7 @@ class TrapDetector:
     def __init__(self):
         self.pattern_counts = {}
         self.logged_traps = set()  # keep track of logged trap URLs
-        self.TRAP_THRESHOLD = 10  # Currently 10 maybe should be higher/lower
+        self.TRAP_THRESHOLD = 10  # Currently set to 10, but can be adjusted up/down
 
     def simplify_url(self, url):
         # Remove numbers, parameters, and trailing slashes
@@ -104,13 +104,19 @@ class TrapDetector:
         simple_url = re.sub(r'[/]+$', '', simple_url)  # remove trailing slash
         return simple_url
 
-    def is_trap(self, url):
+    def count_pattern(self, url):
+        """Increments the count for a URL's simplified pattern."""
         simple_url = self.simplify_url(url)
         self.pattern_counts[simple_url] = self.pattern_counts.get(simple_url, 0) + 1
+
+    def is_trap(self, url):
+        """Checks if a URL is a trap without modifying the count."""
+        simple_url = self.simplify_url(url)
         
-        if self.pattern_counts[simple_url] > self.TRAP_THRESHOLD:
+        if self.pattern_counts.get(simple_url, 0) > self.TRAP_THRESHOLD:
             # Only log once for each URL flagged as a trap
             if simple_url not in self.logged_traps:
+                logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
                 self.logged_traps.add(simple_url)
             return True
         return False
@@ -160,6 +166,7 @@ def scraper(url, resp):
             logger.info(f"URL: {url} was redirected to {final_url}")
             url = normalize(final_url)  # Update the url variable to the final URL after redirection
             # Check for traps using the final URL (not sure if will help tbh)
+            trap_detector.count_pattern(url)
             if trap_detector.is_trap(url):
                 logger.warning(f"Trap detected after redirecting to URL: {url}. Skipping.")
                 return []
@@ -167,9 +174,11 @@ def scraper(url, resp):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
                 
-    if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
-        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
-        return []
+    else:
+        trap_detector.count_pattern(url)
+        if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
+            logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+            return []
 
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
@@ -210,10 +219,11 @@ def scraper(url, resp):
             subdomain = parsed.netloc.split(".")[0]
             with data_lock:
                 visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
-        #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
+        #don't put links you already visited before or traps, kinda clunky especially since the frontier filters out as well
         with data_lock:
             return [link for link in links
-            if is_valid(link) and link not in visited_urls and link not in error_urls]
+            if is_valid(link) and link not in visited_urls and link not in error_urls
+            and not trap_detector.is_trap(link)]
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []

@@ -9,10 +9,11 @@ from utils import get_urlhash, normalize, get_logger
 import threading
 import json
 import faulthandler
+import string
 faulthandler.enable()
 
 MAX_HASHES_STORED = 100
-visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
+visited_content_fingerprints = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
 visited_subdomains = {} #the ics.uci.edu subdomains
 visited_urls = set() #valid pages we visited
@@ -62,43 +63,29 @@ def get_robots_parser(domain):
 
 def tokenize_text(content):
     content = content.lower()
-    #tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content)
-    tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
+    tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content) #filter out the numbers later myself
+    #tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
     return [token for token in tokens if token not in STOP_WORDS]
-    
-def generate_ngrams(content, n=3):
-    return [content[i:i+n] for i in range(len(content) - n + 1)]
-    
-def hash_mod_ngrams(ngrams, modulo=1000):
-    return [hash(ngram) % modulo for ngram in ngrams]
-    
-def check_and_update_recent_hashes(content_hash):
-    # If the content hash is in the set, it's similar to recent content
-    if content_hash in visited_content_hashes:
-        return True
 
-    # If the deque is full, remove the oldest hash from both the deque and the set
-    if len(visited_content_hashes) == MAX_HASHES_STORED:
-        oldest_hash = visited_content_hashes.popleft()
+def jaccard_similarity(set_a, set_b): # As seen in lecture, you take the intersection / union of the sets
+    intersection = len(set_a.intersection(set_b))
+    union = len(set_a.union(set_b))
+    return intersection / union if union != 0 else 0
 
-    # Add the new hash to both the deque and the set
-    visited_content_hashes.append(content_hash)
+def make_fingerprint(tokens, n=3, modulus_value=4):
+    # making my fingerprint
+    ngrams = [tokens[i:i+n] for i in range(len(tokens) - n + 1)]
+    hashed_ngrams = [hash(tuple(ng)) for ng in ngrams]
+    fingerprint = set([h for h in hashed_ngrams if h % modulus_value == 0])
+    return fingerprint
 
+def check_and_update_recent_fingerprint(content_hash):
+    for stored_fingerprint in visited_content_fingerprints:
+        similarity = jaccard_similarity(content_hash, stored_fingerprint)
+        if similarity >= 0.9:  # threshold
+            return True
+    visited_content_fingerprints.append(content_hash)
     return False
-
-def hash_content(content, n=3, modulo=1000):
-    ngrams = generate_ngrams(content, n)
-    ngram_hashes = hash_mod_ngrams(ngrams, modulo)
-    combined_hash = hash(tuple(ngram_hashes))
-    return combined_hash
-
-def is_ascii_url(url):
-    try:
-        url.encode('ascii')
-    except UnicodeEncodeError:
-        logger.warning(f"URL contains non-ASCII characters: {url}")
-        return False
-    return True
 
 def scraper(url, resp, trap_detector):
     logger.debug(f"Entering scraper with URL: {url}")
@@ -151,8 +138,8 @@ def scraper(url, resp, trap_detector):
         
     page_content = BeautifulSoup(resp.raw_response.content, 'lxml').get_text()
     tokens = tokenize_text(page_content)
-    content_hash = hash_content(page_content)
-    if check_and_update_recent_hashes(content_hash):
+    content_hash = make_fingerprint(tokens) #it's a set of hashes
+    if check_and_update_recent_fingerprint(content_hash):
         logger.warning(f"Similar content detected for URL: {url}. Skipping.")
         return []
         
@@ -180,9 +167,10 @@ def scraper(url, resp, trap_detector):
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
         parsed = urlparse(url)  # Use the current URL
         if "ics.uci.edu" in parsed.netloc:
-            subdomain = parsed.netloc.split(".")[0]
+            subdomain = parsed.netloc.split(".ics.uci.edu")[0] #changed the logic cuz it wasn't quite right
             with data_lock:
-                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
+                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1
+
         #don't put links you already visited before or traps, kinda clunky especially since the frontier filters out as well
         with data_lock:
             return [link for link in links
@@ -191,7 +179,15 @@ def scraper(url, resp, trap_detector):
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []
-
+        
+def is_ascii_url(url):
+    try:
+        url.encode('ascii')
+    except UnicodeEncodeError:
+        logger.warning(f"URL contains non-ASCII characters: {url}")
+        return False
+    return True
+    
 def extract_next_links(url, resp): #added ability to parse json files although not sure we should
     logger.debug(f"Extracting next links from URL: {url}")
     links = []
@@ -269,8 +265,8 @@ def is_valid(url):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php and $url and ~eppstein/pix and path and /page/ and php?format
-        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path|/page/|php\?format', url):
+        #filter out xmlrpc.php and $url and ~eppstein/pix and /page/ and php?format
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|/page/|php\?format', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
@@ -308,7 +304,12 @@ def get_sorted_subdomains():
     # Sort the dictionary by its keys (subdomains) in alphabetical order
     sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
     return sorted_subdomains
-
+    
 def get_top_50_words():
-    sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
+    # Filter out items where the word is just a number
+    filtered_words = {word: freq for word, freq in word_frequencies.items() if not word.isnumeric()}
+    
+    # Sort the remaining words by their frequency in descending order
+    sorted_words = sorted(filtered_words.items(), key=lambda x: x[1], reverse=True)
+    
     return sorted_words[:50]

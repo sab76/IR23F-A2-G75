@@ -334,9 +334,6 @@ def get_sorted_subdomains():
     # Sort the dictionary by its keys (subdomains) in alphabetical order
     sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
     return sorted_subdomains
-    
-def get_longest_page():
-    return longest_page
 
 def get_top_50_words():
     sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)

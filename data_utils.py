@@ -1,6 +1,6 @@
 import json
 import threading
-from scraper import visited_urls, visited_subdomains, word_frequencies, longest_page, get_longest_page, get_top_50_words, get_unique_visited_count, data_lock
+from scraper import visited_urls, visited_subdomains, word_frequencies, longest_page, get_top_50_words, get_unique_visited_count, data_lock
 from utils import get_logger
 
 logger = get_logger("SAVING")
@@ -9,8 +9,11 @@ def save_data():
     logger.info("ENTERING SAVE_DATA.")
     with data_lock:
         data = {
+            "visited_urls": list(visited_urls),
+            "error_urls": list(error_urls),
+            "visited_subdomains": visited_subdomains,
             "word_frequencies": word_frequencies,
-            "longest_page": get_longest_page(),
+            "longest_page": longest_page,
             "top_50_words": get_top_50_words(),
             "unique_visited_count": get_unique_visited_count()
         }
@@ -29,7 +32,8 @@ def load_data():
             with open("saved_data.json", "r") as f:
                 data = json.load(f)
 
-            visited_urls.update(data["visited_urls"])
+            visited_urls.update(set(data["visited_urls"]))
+            error_urls.update(set(data["error_urls"]))
             visited_subdomains.update(data["visited_subdomains"])
             word_frequencies.update(data["word_frequencies"])
             longest_page.update(data["longest_page"])

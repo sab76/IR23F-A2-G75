@@ -29,7 +29,7 @@ class Crawler(object):
             worker.start()
 
     def schedule_data_saving(self):
-        SAVE_INTERVAL = 300  # 5 minutes
+        SAVE_INTERVAL = 60  # 1 minute
         threading.Timer(SAVE_INTERVAL, self.periodic_save).start()
 
     def periodic_save(self):

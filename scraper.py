@@ -165,19 +165,14 @@ def scraper(url, resp):
             logger.info(f"URL: {url} was redirected to {final_url}")
             url = normalize(final_url)  # Update the url variable to the final URL after redirection
             # Check for traps using the final URL (not sure if will help tbh)
-            trap_detector.count_pattern(url)
-            if trap_detector.is_trap(url):
-                logger.warning(f"Trap detected after redirecting to URL: {url}. Skipping.")
-                return []
             if not is_valid(url):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
                 
-    else:
-        trap_detector.count_pattern(url)
-        if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
-            logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
-            return []
+    trap_detector.count_pattern(url)
+    if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
+        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+        return []
 
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
@@ -317,7 +312,7 @@ def is_valid(url):
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
             + r"|png|tiff?|mid|mp2|mp3|mp4"
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp" #similarly wtf is an odp
+            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"

@@ -37,4 +37,3 @@ def load_data():
             logger.warning("No saved data found. Starting from scratch.")
         except Exception as e:
             logger.error(f"Error while loading data from 'saved_data.json': {e}")
-Now, when the save_data() and load_data() functions are called, you s

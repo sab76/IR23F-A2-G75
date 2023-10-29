@@ -1,9 +1,10 @@
 import re
-from urllib.parse import urlparse, urljoin, urldefrag
+from urllib.parse import urlparse, urljoin, urldefrag, urlsplit
 from bs4 import BeautifulSoup
 from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
+import urllib.error
 from utils import get_urlhash, normalize, get_logger
 import threading
 import json
@@ -294,8 +295,8 @@ def is_valid(url):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php and $url
-        if re.search(r'xmlrpc\.php|\$url', url):
+        #filter out xmlrpc.php and $url and ~eppstein/pix and path
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

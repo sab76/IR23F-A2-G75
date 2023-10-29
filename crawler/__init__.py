@@ -12,14 +12,16 @@ class Crawler(object):
         self.frontier = frontier_factory(config, restart)
         self.workers = list()
         self.worker_factory = worker_factory
+        self.is_crawling = True  # Trying to detect when I stop crawling so that I can stop saving info
         
         # Load saved data if it's a restart
         if restart:
             load_data()
 
-    def start_async(self):
+        # Schedule saving
         self.schedule_data_saving()
-   
+
+    def start_async(self):
         self.workers = [
             self.worker_factory(worker_id, self.config, self.frontier)
             for worker_id in range(self.config.threads_count)]
@@ -31,12 +33,14 @@ class Crawler(object):
         threading.Timer(SAVE_INTERVAL, self.periodic_save).start()
 
     def periodic_save(self):
-        save_data()
-        self.schedule_data_saving()  # schedule the next save
+        if self.is_crawling:  # Only save and reschedule if still crawling
+            save_data()
+            self.schedule_data_saving()
 
     def start(self):
         self.start_async()
         self.join()
+        self.is_crawling = False  # Set the flag to False once crawling is done
 
     def join(self):
         for worker in self.workers:

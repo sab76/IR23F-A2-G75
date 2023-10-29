@@ -322,8 +322,8 @@ def is_valid(url, resp, visited_sets):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php and $url
-        if re.search(r'xmlrpc\.php|\$url', url):
+        #filter out xmlrpc.php and $url and ~eppstein/pix and path
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

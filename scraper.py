@@ -328,20 +328,16 @@ def is_valid(url):
         raise
 
 def get_unique_visited_count():
-    with data_lock:
-        return len(visited_urls)
+    return len(visited_urls)
     
 def get_sorted_subdomains():
-    with data_lock:
-        # Sort the dictionary by its keys (subdomains) in alphabetical order
-        sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
-        return sorted_subdomains
+    # Sort the dictionary by its keys (subdomains) in alphabetical order
+    sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
+    return sorted_subdomains
     
 def get_longest_page():
-    with data_lock:
-        return longest_page
+    return longest_page
 
 def get_top_50_words():
-    with data_lock:
-        sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
-        return sorted_words[:50]
+    sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
+    return sorted_words[:50]

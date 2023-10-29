@@ -346,3 +346,17 @@ def get_top_50_words():
     sorted_words = sorted(filtered_words.items(), key=lambda x: x[1], reverse=True)
     
     return sorted_words[:50]
+
+def crc8(data):
+    crc = 0
+    # polynomial used for CRC calc 
+    polyfunc = 0x107
+    for byte in data:
+        crc ^=byte
+        for _ in range(8):
+            if crc & 0x80:
+                crc = (crc << 1) ^ polyfunc
+            else:
+                crc <<= 1
+            crc &= 0xFF
+    return crc 

@@ -310,13 +310,13 @@ def is_valid(url):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
-            + r"|png|tiff?|mid|mp2|mp3|mp4|lisp" #removing lisp files
+            + r"|png|tiff?|mid|mp2|mp3|mp4|lisp|" #removing lisp files
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
+            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|bat"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|z|tar)$", parsed.path.lower())
             
         parsed_domain = f"{parsed.scheme}://{parsed.netloc}"
         parser = get_robots_parser(parsed_domain)

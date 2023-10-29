@@ -6,6 +6,7 @@ from utils import get_logger
 logger = get_logger("SAVING")
 
 def save_data():
+    logger.info("ENTERING SAVE_DATA.")
     with data_lock:
         data = {
             "word_frequencies": word_frequencies,
@@ -15,6 +16,7 @@ def save_data():
         }
 
         try:
+            logger.info("STARTING.")
             with open("saved_data.json", "w") as f:
                 json.dump(data, f)
             logger.info("Data successfully saved to 'saved_data.json'.")

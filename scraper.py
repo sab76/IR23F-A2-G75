@@ -269,7 +269,7 @@ def is_valid(url):
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
         #filter out xmlrpc.php and $url and ~eppstein/pix and path and /page/ and php?format
-        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path|/page/|php?format', url):
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path|/page/|php\?format', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):

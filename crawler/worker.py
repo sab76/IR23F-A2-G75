@@ -5,6 +5,7 @@ from utils.download import download
 from utils import get_logger
 import scraper
 import time
+import re
 
 class TrapDetector: #moved to worker so I can detect before sending requests to get rid of a bunch of them at a time without dling
     def __init__(self):

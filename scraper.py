@@ -90,37 +90,6 @@ def hash_content(content, n=3, modulo=1000):
     ngram_hashes = hash_mod_ngrams(ngrams, modulo)
     combined_hash = hash(tuple(ngram_hashes))
     return combined_hash
-   
-class TrapDetector:
-    def __init__(self):
-        self.pattern_counts = {}
-        self.logged_traps = set()  # keep track of logged trap URLs
-        self.TRAP_THRESHOLD = 10  # Currently set to 10, but can be adjusted up/down
-
-    def simplify_url(self, url):
-        # Remove numbers, parameters, and trailing slashes
-        simple_url = re.sub(r'\d+', '', url)  # remove numbers
-        simple_url = re.sub(r'\?.*$', '', simple_url)  # remove query params
-        simple_url = re.sub(r'[/]+$', '', simple_url)  # remove trailing slash
-        return simple_url
-
-    def count_pattern(self, url):
-        """Increments the count for a URL's simplified pattern."""
-        simple_url = self.simplify_url(url)
-        self.pattern_counts[simple_url] = self.pattern_counts.get(simple_url, 0) + 1
-
-    def is_trap(self, url):
-        """Checks if a URL is a trap without modifying the count."""
-        simple_url = self.simplify_url(url)
-        
-        if self.pattern_counts.get(simple_url, 0) > self.TRAP_THRESHOLD:
-            # Only log once for each URL flagged as a trap
-            if simple_url not in self.logged_traps:
-                self.logged_traps.add(simple_url)
-            return True
-        return False
-
-trap_detector = TrapDetector()
 
 def is_ascii_url(url):
     try:
@@ -130,7 +99,7 @@ def is_ascii_url(url):
         return False
     return True
 
-def scraper(url, resp):
+def scraper(url, resp, trap_detector):
     logger.debug(f"Entering scraper with URL: {url}")
     global visited_urls
     #checks if page sent actual data? Not sure this is good because it'll hide all the errors I think
@@ -299,8 +268,8 @@ def is_valid(url):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php and $url and ~eppstein/pix and path
-        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path', url):
+        #filter out xmlrpc.php and $url and ~eppstein/pix and path and /page/
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path|/page/', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
@@ -315,7 +284,7 @@ def is_valid(url):
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|bat"
             + r"|epub|dll|cnf|tgz|sha1|col"
-            + r"|thmx|mso|arff|rtf|jar|csv"
+            + r"|thmx|mso|arff|rtf|jar|csv|sql|test|train|theory"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz|z|tar)$", parsed.path.lower())
             
         parsed_domain = f"{parsed.scheme}://{parsed.netloc}"

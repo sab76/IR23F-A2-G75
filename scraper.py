@@ -62,7 +62,8 @@ def get_robots_parser(domain):
 
 def tokenize_text(content):
     content = content.lower()
-    tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content)
+    #tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content)
+    tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
     return [token for token in tokens if token not in STOP_WORDS]
     
 def generate_ngrams(content, n=3):

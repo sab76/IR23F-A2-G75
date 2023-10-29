@@ -1,6 +1,6 @@
 import re
 from urllib.parse import urlparse, urljoin, urldefrag, urlsplit
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup 
 from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
@@ -9,10 +9,11 @@ from utils import get_urlhash, normalize, get_logger
 import threading
 import json
 import faulthandler
+import string
 faulthandler.enable()
 
 MAX_HASHES_STORED = 100
-visited_content_hashes = deque(maxlen=MAX_HASHES_STORED)
+visited_content_fingerprints = deque(maxlen=MAX_HASHES_STORED)
 robot_parsers = {} #extra credit implement this yourself
 visited_subdomains = {} #the ics.uci.edu subdomains
 visited_urls = set() #valid pages we visited
@@ -62,71 +63,31 @@ def get_robots_parser(domain):
 
 def tokenize_text(content):
     content = content.lower()
-    tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content)
+    tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content) #filter out the numbers later myself
+    #tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
     return [token for token in tokens if token not in STOP_WORDS]
-    
-def generate_ngrams(content, n=3):
-    return [content[i:i+n] for i in range(len(content) - n + 1)]
-    
-def hash_mod_ngrams(ngrams, modulo=1000):
-    return [hash(ngram) % modulo for ngram in ngrams]
-    
-def check_and_update_recent_hashes(content_hash):
-    # If the content hash is in the set, it's similar to recent content
-    if content_hash in visited_content_hashes:
-        return True
 
-    # If the deque is full, remove the oldest hash from both the deque and the set
-    if len(visited_content_hashes) == MAX_HASHES_STORED:
-        oldest_hash = visited_content_hashes.popleft()
+def jaccard_similarity(set_a, set_b): # As seen in lecture, you take the intersection / union of the sets
+    intersection = len(set_a.intersection(set_b))
+    union = len(set_a.union(set_b))
+    return intersection / union if union != 0 else 0
 
-    # Add the new hash to both the deque and the set
-    visited_content_hashes.append(content_hash)
+def make_fingerprint(tokens, n=3, modulus_value=4):
+    # making my fingerprint
+    ngrams = [tokens[i:i+n] for i in range(len(tokens) - n + 1)]
+    hashed_ngrams = [hash(tuple(ng)) for ng in ngrams]
+    fingerprint = set([h for h in hashed_ngrams if h % modulus_value == 0])
+    return fingerprint
 
+def check_and_update_recent_fingerprint(content_hash):
+    for stored_fingerprint in visited_content_fingerprints:
+        similarity = jaccard_similarity(content_hash, stored_fingerprint)
+        if similarity >= 0.9:  # threshold
+            return True
+    visited_content_fingerprints.append(content_hash)
     return False
 
-def hash_content(content, n=3, modulo=1000):
-    ngrams = generate_ngrams(content, n)
-    ngram_hashes = hash_mod_ngrams(ngrams, modulo)
-    combined_hash = hash(tuple(ngram_hashes))
-    return combined_hash
-   
-class TrapDetector:
-    def __init__(self):
-        self.pattern_counts = {}
-        self.logged_traps = set()  # keep track of logged trap URLs
-        self.TRAP_THRESHOLD = 10  # Currently 10 maybe should be higher
-
-    def simplify_url(self, url):
-        # Remove numbers, parameters, and trailing slashes
-        simple_url = re.sub(r'\d+', '', url)  # remove numbers
-        simple_url = re.sub(r'\?.*$', '', simple_url)  # remove query params
-        simple_url = re.sub(r'[/]+$', '', simple_url)  # remove trailing slash
-        return simple_url
-
-    def is_trap(self, url):
-        simple_url = self.simplify_url(url)
-        self.pattern_counts[simple_url] = self.pattern_counts.get(simple_url, 0) + 1
-        
-        if self.pattern_counts[simple_url] > self.TRAP_THRESHOLD:
-            # Only log once for each URL flagged as a trap
-            if simple_url not in self.logged_traps:
-                logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
-                self.logged_traps.add(simple_url)
-            return True
-        return False
-
-trap_detector = TrapDetector()
-
-def is_ascii_url(url):
-    try:
-        url.encode('ascii')
-    except UnicodeEncodeError:
-        logger.warning(f"URL contains non-ASCII characters: {url}")
-        return False
-    return True
-
-def scraper(url, resp):
+def scraper(url, resp, trap_detector):
     logger.debug(f"Entering scraper with URL: {url}")
     global visited_urls
     #checks if page sent actual data? Not sure this is good because it'll hide all the errors I think
@@ -135,7 +96,6 @@ def scraper(url, resp):
     #    return []
 
     #gonna check this instead not sure if best
-    
     if not hasattr(resp, 'raw_response') or resp.raw_response is None:
         logger.warning(f"'raw_response' attribute missing or None for URL: {url}. Skipping.")
         return []
@@ -162,23 +122,24 @@ def scraper(url, resp):
             logger.info(f"URL: {url} was redirected to {final_url}")
             url = normalize(final_url)  # Update the url variable to the final URL after redirection
             # Check for traps using the final URL (not sure if will help tbh)
-            if trap_detector.is_trap(url):
-                logger.warning(f"Trap detected after redirecting to URL: {url}. Skipping.")
-                return []
             if not is_valid(url):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
                 
-    
+    trap_detector.count_pattern(url)
+    if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
+        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+        return []
+
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
         logger.warning(f"Content size for URL: {url} exceeds the threshold. Skipping.")
         return []
-        
+    
     page_content = BeautifulSoup(resp.raw_response.content, 'lxml').get_text()
     tokens = tokenize_text(page_content)
-    content_hash = hash_content(page_content)
-    if check_and_update_recent_hashes(content_hash):
+    content_hash = make_fingerprint(tokens) #it's a set of hashes
+    if check_and_update_recent_fingerprint(content_hash):
         logger.warning(f"Similar content detected for URL: {url}. Skipping.")
         return []
         
@@ -206,10 +167,11 @@ def scraper(url, resp):
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
         parsed = urlparse(url)  # Use the current URL
         if "ics.uci.edu" in parsed.netloc:
-            subdomain = parsed.netloc.split(".")[0]
+            subdomain = parsed.netloc.split(".ics.uci.edu")[0] #changed the logic cuz it wasn't quite right
             with data_lock:
-                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1 #use dictionary
-        #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
+                visited_subdomains[subdomain] = visited_subdomains.get(subdomain, 0) + 1
+
+        #don't put links you already visited before or traps, kinda clunky especially since the frontier filters out as well
         with data_lock:
             return [link for link in links
             if is_valid(link, resp, visited_urls) and link not in visited_urls and link not in error_urls
@@ -217,7 +179,15 @@ def scraper(url, resp):
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []
-
+        
+def is_ascii_url(url):
+    try:
+        url.encode('ascii')
+    except UnicodeEncodeError:
+        logger.warning(f"URL contains non-ASCII characters: {url}")
+        return False
+    return True
+    
 def extract_next_links(url, resp): #added ability to parse json files although not sure we should
     logger.debug(f"Extracting next links from URL: {url}")
     links = []
@@ -322,8 +292,8 @@ def is_valid(url, resp, visited_sets):
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
-        #filter out xmlrpc.php and $url and ~eppstein/pix and path
-        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|path', url):
+        #filter out xmlrpc.php and $url and ~eppstein/pix and /page/ and php?format
+        if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|/page/|php\?format', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
         if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
@@ -331,22 +301,15 @@ def is_valid(url, resp, visited_sets):
         #remove mailto links
         if re.match(r'^mailto:', url):
             return False
-        flag = re.match(
-            r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
+        return not re.match(
+            r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
+            + r"|png|tiff?|mid|mp2|mp3|mp4|lisp|" #removing lisp files
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1"
-            + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
-        if (flag):
-            return False
-        
-        html = BeautifulSoup(resp.raw_response.content, 'lxml')
-        tokens = re.findall(r"[\x30-\x39\x41-\x5A\x61-\x7A]+", html.get_text())
-
-        visited_urls.add(url)
+            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
+            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|bat"
+            + r"|epub|dll|cnf|tgz|sha1|col"
+            + r"|thmx|mso|arff|rtf|jar|csv|sql|test|train|theory"
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|z|tar)$", parsed.path.lower())
             
         parsed_domain = f"{parsed.scheme}://{parsed.netloc}"
         parser = get_robots_parser(parsed_domain)
@@ -368,20 +331,18 @@ def is_valid(url, resp, visited_sets):
 
 
 def get_unique_visited_count():
-    with data_lock:
-        return len(visited_urls)
+    return len(visited_urls)
     
 def get_sorted_subdomains():
-    with data_lock:
-        # Sort the dictionary by its keys (subdomains) in alphabetical order
-        sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
-        return sorted_subdomains
+    # Sort the dictionary by its keys (subdomains) in alphabetical order
+    sorted_subdomains = sorted(visited_subdomains.items(), key=lambda x: x[0])
+    return sorted_subdomains
     
-def get_longest_page():
-    with data_lock:
-        return longest_page
-
 def get_top_50_words():
-    with data_lock:
-        sorted_words = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
-        return sorted_words[:50]
+    # Filter out items where the word is just a number
+    filtered_words = {word: freq for word, freq in word_frequencies.items() if not word.isnumeric()}
+    
+    # Sort the remaining words by their frequency in descending order
+    sorted_words = sorted(filtered_words.items(), key=lambda x: x[1], reverse=True)
+    
+    return sorted_words[:50]

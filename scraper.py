@@ -95,7 +95,7 @@ class TrapDetector:
     def __init__(self):
         self.pattern_counts = {}
         self.logged_traps = set()  # keep track of logged trap URLs
-        self.TRAP_THRESHOLD = 20  # Currently 20 maybe should be higher / lower
+        self.TRAP_THRESHOLD = 10  # Currently 10 maybe should be higher/lower
 
     def simplify_url(self, url):
         # Remove numbers, parameters, and trailing slashes
@@ -111,7 +111,6 @@ class TrapDetector:
         if self.pattern_counts[simple_url] > self.TRAP_THRESHOLD:
             # Only log once for each URL flagged as a trap
             if simple_url not in self.logged_traps:
-                logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
                 self.logged_traps.add(simple_url)
             return True
         return False
@@ -135,7 +134,6 @@ def scraper(url, resp):
     #    return []
 
     #gonna check this instead not sure if best
-    
     if not hasattr(resp, 'raw_response') or resp.raw_response is None:
         logger.warning(f"'raw_response' attribute missing or None for URL: {url}. Skipping.")
         return []
@@ -169,7 +167,10 @@ def scraper(url, resp):
                 logger.warning(f"Redirected URL: {url} is not valid. Skipping.")
                 return []
                 
-    
+    if trap_detector.is_trap(url): # I need to detect traps after VISITING the page
+        logger.warning(f"Potential trap detected at URL: {url}. Skipping.")
+        return []
+
     # AVOIDS BeautifulSoup processing on big files apparently slow
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
         logger.warning(f"Content size for URL: {url} exceeds the threshold. Skipping.")
@@ -212,8 +213,7 @@ def scraper(url, resp):
         #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
         with data_lock:
             return [link for link in links
-            if is_valid(link) and link not in visited_urls and link not in error_urls
-            and not trap_detector.is_trap(link)]
+            if is_valid(link) and link not in visited_urls and link not in error_urls]
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
         return []
@@ -283,8 +283,8 @@ def is_valid(url):
         # or https://ngs.ics.uci.edu/wp-json/oembed/1.0/embed?url=https%3a%2f%2fngs.ics.uci.edu%2fextreme-stories-12%2f&format=xml
         if 'wp-json' in url:
             return False
-        # maybe it's too agressive but I'm not visiting anything that has a query in it
-        if '?' in url:
+        # because of wiki.ics.uci.edu/doku I have a bunch of queries I'm guessing that's not interesting to scrape
+        if '?do=' in url:
             return False
         # Check to filter out URLs ending with (4 numbers)/revisions or /revisions/(4 numbers)
         if re.search(r'/\d{4}/revisions$', url) or re.search(r'/revisions/\d{4}$', url):

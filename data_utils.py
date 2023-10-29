@@ -1,6 +1,6 @@
 import json
 import threading
-from scraper import visited_urls, visited_subdomains, word_frequencies, longest_page, get_top_50_words, get_unique_visited_count, data_lock
+from scraper import visited_urls, visited_subdomains, word_frequencies, longest_page, get_top_50_words, get_unique_visited_count, error_urls, data_lock
 from utils import get_logger
 
 logger = get_logger("SAVING")

@@ -5,6 +5,7 @@ from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
 import urllib.error
+from utils import get_urlhash, normalize, get_logger
 import threading
 import json
 import faulthandler
@@ -161,7 +162,7 @@ def scraper(url, resp):
             logger.info(f"URL: {url} was redirected to {final_url}")
             url = normalize(final_url)  # Update the url variable to the final URL after redirection
             # Check for traps using the final URL (not sure if will help tbh)
-            if trap_detector.is_trap(url, resp, visited_urls):
+            if trap_detector.is_trap(url):
                 logger.warning(f"Trap detected after redirecting to URL: {url}. Skipping.")
                 return []
             if not is_valid(url):
@@ -211,7 +212,7 @@ def scraper(url, resp):
         #don't put links you already visited before or traps, maybe kinda clunky CHECK IF FRONTIER FILTERS OUT VISITED
         with data_lock:
             return [link for link in links
-            if is_valid(link,resp, visited_urls) and link not in visited_urls and link not in error_urls
+            if is_valid(link, resp, visited_urls) and link not in visited_urls and link not in error_urls
             and not trap_detector.is_trap(link)]
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")

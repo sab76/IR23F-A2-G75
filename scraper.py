@@ -1,6 +1,6 @@
 import re
 from urllib.parse import urlparse, urljoin, urldefrag, urlsplit
-from bs4 import BeautifulSoup 
+from bs4 import BeautifulSoup
 from robotexclusionrulesparser import RobotExclusionRulesParser
 from collections import deque
 from datetime import datetime, timedelta
@@ -66,6 +66,20 @@ def tokenize_text(content):
     tokens = re.findall(r'\b[a-z0-9]+(?=\b|_)|(?<=_)[a-z0-9]+', content) #filter out the numbers later myself
     #tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
     return [token for token in tokens if token not in STOP_WORDS]
+
+def crc8(data):
+    crc = 0
+    # polynomial used for CRC calc 
+    polyfunc = 0x107
+    for byte in data:
+        crc ^=byte
+        for _ in range(8):
+            if crc & 0x80:
+                crc = (crc << 1) ^ polyfunc
+            else:
+                crc <<= 1
+            crc &= 0xFF
+    return crc 
 
 def jaccard_similarity(set_a, set_b): # As seen in lecture, you take the intersection / union of the sets
     intersection = len(set_a.intersection(set_b))
@@ -135,7 +149,7 @@ def scraper(url, resp, trap_detector):
     if len(resp.raw_response.content) > MAX_CONTENT_SIZE: 
         logger.warning(f"Content size for URL: {url} exceeds the threshold. Skipping.")
         return []
-    
+        
     page_content = BeautifulSoup(resp.raw_response.content, 'lxml').get_text()
     tokens = tokenize_text(page_content)
     content_hash = make_fingerprint(tokens) #it's a set of hashes
@@ -143,11 +157,12 @@ def scraper(url, resp, trap_detector):
         logger.warning(f"Similar content detected for URL: {url}. Skipping.")
         return []
         
-    # currently keeping the length of the longest page in terms of tokens WITHOUT the stop words, maybe change
+    # currently keeping the length of the longest page in terms of tokens WITHOUT the stop words, manually filtering out digits here too
+    word_tokens = [token for token in tokens if not token.isdigit()]
     with data_lock:
-        if len(tokens) > longest_page["word_count"]:
+        if len(word_tokens) > longest_page["word_count"]:
             longest_page["url"] = url
-            longest_page["word_count"] = len(tokens)
+            longest_page["word_count"] = len(word_tokens)
 
     with data_lock:
         for token in tokens:
@@ -174,7 +189,7 @@ def scraper(url, resp, trap_detector):
         #don't put links you already visited before or traps, kinda clunky especially since the frontier filters out as well
         with data_lock:
             return [link for link in links
-            if is_valid(link, resp, visited_urls) and link not in visited_urls and link not in error_urls
+            if is_valid(link) and link not in visited_urls and link not in error_urls
             and not trap_detector.is_trap(link)]
     else:
         logger.debug(f"Exiting scraper for URL: {url} with non-200 status")
@@ -239,43 +254,16 @@ def extract_next_links(url, resp): #added ability to parse json files although n
     return links
 
 
-def is_valid(url, resp, visited_sets):
+def is_valid(url):
     logger.debug(f"Checking if URL is valid: {url}")
     try:
         parsed = urlparse(url)
-
-        #attempt comain without subdomain
-        try:
-            test = urlsplit(url).netloc.split(".")[-4:]
-        except:
-            return False
-        domain = ".".join(test[-3:])
-
-        # split path
-        sPath = url.split("/")
-        sPathLast = sPath[-1]
-
-        if url in visited_urls:
-            return False
-        
-        if 'wics' in parsed.netloc and 'events' in sPath:
-            return False
-        if 'page' in sPath:
-            return False
-        # jpg file catch 
-        if "wp-" in parsed.path:
-            return False
-        if "?" in url:
-            return False
-
         if parsed.scheme not in set(["http", "https"]):
             return False
-        
         if not re.match(
             r".*(\.ics\.uci\.edu|\.cs\.uci\.edu|\.informatics\.uci\.edu|\.stat\.uci\.edu)/.*",
             url):
             return False
-        
         # Check for WordPress API endpoints like https://ngs.ics.uci.edu/wp-json/wp/v2/posts?tags=97
         # or https://ngs.ics.uci.edu/wp-json/oembed/1.0/embed?url=https%3a%2f%2fngs.ics.uci.edu%2fextreme-stories-12%2f&format=xml
         if 'wp-json' in url:
@@ -287,8 +275,8 @@ def is_valid(url, resp, visited_sets):
         if re.search(r'/\d{4}/revisions$', url) or re.search(r'/revisions/\d{4}$', url):
             return False
         #removes repeated directories in a link, not sure if it's really needed for UCI sites
-        if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
-            return False
+        #if re.search(r'^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$', url):
+        #    return False
         #filters out .html files that are on the ics.uci.edu domain
         if re.search(r'.*ics\.uci\.edu.*\.(html|xhtml)$', url):
             return False
@@ -296,8 +284,8 @@ def is_valid(url, resp, visited_sets):
         if re.search(r'xmlrpc\.php|\$url|~eppstein/pix|/page/|php\?format', url):
             return False
         # Check if URL ends with .txt and is not robots.txt
-        if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
-            return False
+        #if parsed.path.endswith('.txt') and not parsed.path.endswith('robots.txt'):
+        #    return False
         #remove mailto links
         if re.match(r'^mailto:', url):
             return False
@@ -323,12 +311,6 @@ def is_valid(url, resp, visited_sets):
         print ("TypeError for ", parsed)
         logger.error(f"TypeError encountered for URL: {url}.")  # <-- Log the error
         raise
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return False
-    
-
-
 
 def get_unique_visited_count():
     return len(visited_urls)
@@ -346,17 +328,3 @@ def get_top_50_words():
     sorted_words = sorted(filtered_words.items(), key=lambda x: x[1], reverse=True)
     
     return sorted_words[:50]
-
-def crc8(data):
-    crc = 0
-    # polynomial used for CRC calc 
-    polyfunc = 0x107
-    for byte in data:
-        crc ^=byte
-        for _ in range(8):
-            if crc & 0x80:
-                crc = (crc << 1) ^ polyfunc
-            else:
-                crc <<= 1
-            crc &= 0xFF
-    return crc 

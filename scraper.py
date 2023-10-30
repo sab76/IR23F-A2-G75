@@ -71,9 +71,8 @@ def get_robots_parser(domain):
                 sitemap_urls = extract_urls_from_sitemap(response.content)
                 with data_lock:
                     robot_parsers[domain]['sitemap_urls'] = sitemap_urls
+                logger.info(f"Fetched sitemap from {sitemap_url}. Extracted {len(sitemap_urls)} URLs.") #needed some logging
 
-        except Exception as e:
-            logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
         except Exception as e:
             logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
     else:

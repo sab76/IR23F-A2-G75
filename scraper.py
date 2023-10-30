@@ -14,6 +14,7 @@ faulthandler.enable()
 
 MAX_HASHES_STORED = 100
 visited_content_fingerprints = deque(maxlen=MAX_HASHES_STORED)
+crc32Set = set() # stores hashes for exact similarity check
 robot_parsers = {} #extra credit implement this yourself
 visited_subdomains = {} #the ics.uci.edu subdomains
 visited_urls = set() #valid pages we visited
@@ -67,19 +68,28 @@ def tokenize_text(content):
     #tokens = re.findall(r'\b[a-z]+(?=\b|_)|(?<=_)[a-z]+', content) #I GOT NUMBERS OTHERWISE I WANT WORDS ONLY
     return [token for token in tokens if token not in STOP_WORDS]
 
-def crc8(data):
-    crc = 0
-    # polynomial used for CRC calc 
-    polyfunc = 0x107
-    for byte in data:
-        crc ^=byte
-        for _ in range(8):
-            if crc & 0x80:
-                crc = (crc << 1) ^ polyfunc
+def crc32(data):
+    crc = 0xffffffff
+    table = [0] * 256
+    for i in range(256):
+        c = i
+        for j in range(8):
+            if c & 1:
+                c = 0xedb88320 ^ (c >> 1)
             else:
-                crc <<= 1
-            crc &= 0xFF
-    return crc 
+                c = c >> 1
+        table[i] = c 
+    for byte in data:
+        crc = table[(crc ^ byte) & 0xff] ^ (crc >> 8)
+    return crc ^ 0xffffffff
+
+def check_crc32(content, crc32Set):
+    crcValue = crc32(content.encode('utf-8'))
+    if crcValue in crc32Set:
+        return True
+    crc32Set.add(crcValue)
+    return False 
+
 
 def jaccard_similarity(set_a, set_b): # As seen in lecture, you take the intersection / union of the sets
     intersection = len(set_a.intersection(set_b))
@@ -152,6 +162,11 @@ def scraper(url, resp, trap_detector):
         
     page_content = BeautifulSoup(resp.raw_response.content, 'lxml').get_text()
     tokens = tokenize_text(page_content)
+
+    if check_crc32(page_content, crc32Set):
+        logger.warning(f"Exact content detected for URL: {url}. Skipping")
+        return []
+    
     content_hash = make_fingerprint(tokens) #it's a set of hashes
     if check_and_update_recent_fingerprint(content_hash):
         logger.warning(f"Similar content detected for URL: {url}. Skipping.")

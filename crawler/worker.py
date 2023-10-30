@@ -14,7 +14,10 @@ class TrapDetector: #moved to worker so I can detect before sending requests to 
         self.TRAP_THRESHOLD = 10  # Currently set to 10, but can be adjusted up/down
 
     def simplify_url(self, url):
-        # Remove numbers, parameters, and trailing slashes
+        # whitelisted "ramesh/page/" cuz it might be useful to scrape
+        if re.search(r'ramesh/page/\d+/', url):
+            return url
+
         simple_url = re.sub(r'\d+', '', url)  # remove numbers
         simple_url = re.sub(r'\?.*$', '', simple_url)  # remove query params
         simple_url = re.sub(r'[/]+$', '', simple_url)  # remove trailing slash

@@ -36,23 +36,44 @@ except Exception as e:
     logger.error(f"Error reading 'common_words.txt': {e}")
     STOP_WORDS = set()  # default to an empty set
     
+def extract_sitemap_url(robots_txt_content): #get the url of the sitemap xml file from the robots.txt if it exists
+    for line in robots_txt_content.splitlines():
+        if line.startswith("Sitemap:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+def extract_urls_from_sitemap(sitemap_content): #using beautifulsoup to extract the urls from the xml file
+    soup = BeautifulSoup(sitemap_content, 'xml')
+    urls = [tag.text for tag in soup.find_all('loc')]
+    return urls
+    
 def get_robots_parser(domain): 
     current_time = datetime.now()
     parser = None
     fetch_required = False
     
-    with data_lock:
+    with data_lock: #checking if I have the robots.txt in cache and that it's less than a day old
         if domain not in robot_parsers or (current_time - robot_parsers[domain]['timestamp']) > timedelta(days=1):
             fetch_required = True
             
     if fetch_required:
-        rerp = RobotExclusionRulesParser()
+        rerp = RobotExclusionRulesParser() #used a 3rd party parser because it can figure out wildcards, was not said if we can use libraries
         rerp.user_agent = "Group75Scraper"
         try:
             rerp.fetch(f"{domain}/robots.txt")
             with data_lock:
                 robot_parsers[domain] = {'parser': rerp, 'timestamp': current_time}
                 logger.info(f"Fetched robots.txt for domain: {domain}")
+                
+            sitemap_url = extract_sitemap_url(rerp.content) #getting the sitemap from robots.txt
+            if sitemap_url:
+                response = requests.get(sitemap_url)
+                sitemap_urls = extract_urls_from_sitemap(response.content)
+                with data_lock:
+                    robot_parsers[domain]['sitemap_urls'] = sitemap_urls
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
         except Exception as e:
             logger.warning(f"Failed to fetch robots.txt from {domain}. Error: {e}. Assuming all paths are allowed.")
     else:
@@ -195,7 +216,7 @@ def scraper(url, resp, trap_detector):
                 logger.debug(f"URL added to visited_urls: {url}. Total visited: {len(visited_urls)}")
 
         # Check and keep track of how many subdomains there are in the ics.uci.edu domain
-        parsed = urlparse(url)  # Use the current URL
+        parsed = urlparse(url)
         if "ics.uci.edu" in parsed.netloc:
             subdomain = parsed.netloc.split(".ics.uci.edu")[0] #changed the logic cuz it wasn't quite right
             with data_lock:
@@ -265,6 +286,11 @@ def extract_next_links(url, resp): #added ability to parse json files although n
 
             links.append(absolute_url)
             
+    #add sitemap links if available, should be fine because it'll get filtered right after
+    parsed_domain = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+    if parsed_domain in robot_parsers and 'sitemap_urls' in robot_parsers[parsed_domain]:
+        links.extend(robot_parsers[parsed_domain]['sitemap_urls'])
+            
     logger.debug(f"Extracted {len(links)} links from URL: {url}")
     return links
 
@@ -307,8 +333,8 @@ def is_valid(url):
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico|bam" #wtf is a bam file https://cbcl.ics.uci.edu/public_data/tree-hmm-sample-data/
             + r"|png|tiff?|mid|mp2|mp3|mp4|lisp|" #removing lisp files
-            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|svg" #similarly wtf is an odp
+            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|mpg|ipynb" #not sure I should filter out ipynb because they're mostly text but the pics are junk data
+            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names|odp|ova|apk|svg|war" #similarly wtf is an odp
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|bat"
             + r"|epub|dll|cnf|tgz|sha1|col"
             + r"|thmx|mso|arff|rtf|jar|csv|sql|test|train|theory"
